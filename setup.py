@@ -9,7 +9,7 @@ def readme():
 VERSION = '0.0.1'
 
 setuptools.setup(
-    name='sqltrans',
+    name='msqltrans',
     packages=setuptools.find_packages(exclude=['tests', 'tests.*']),
     version=VERSION,
     license='MIT',

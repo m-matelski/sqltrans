@@ -1,1 +1,0 @@
-import sqltrans.translations

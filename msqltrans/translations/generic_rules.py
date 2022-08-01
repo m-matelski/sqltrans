@@ -1,9 +1,9 @@
 import sqlparse.sql as s
 
-from sqltrans.helpers import build_tokens, replace_token
-from sqltrans.queries import get_function_name, get_function_params
-from sqltrans.search import match_string
-from sqltrans.translate import Translation
+from msqltrans.helpers import build_tokens, replace_token
+from msqltrans.queries import get_function_name, get_function_params
+from msqltrans.search import match_string
+from msqltrans.translate import Translation
 
 
 def debug_rule(parsed: s.TypeParsed) -> None:

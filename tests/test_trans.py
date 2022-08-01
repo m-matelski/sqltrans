@@ -3,10 +3,10 @@ from copy import deepcopy
 import sqlparse
 from sqlparse import sql as s
 
-from sqltrans.queries import get_function_params
-from sqltrans.search import Search
-from sqltrans.translate import find_route, translate
-from sqltrans.utils import read_file
+from msqltrans.queries import get_function_params
+from msqltrans.search import Search
+from msqltrans.translate import find_route, translate
+from msqltrans.utils import read_file
 
 
 def test_dummy_parse():

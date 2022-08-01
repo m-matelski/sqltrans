@@ -69,17 +69,17 @@ class TranslationBase(ABC):
     def translate(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
         pass
 
-
-class Transformation(TranslationBase):
-    def __init__(self, translation_rules: List[TranslationCommand],
-                 src_parser: SqlParser | None = None, tgt_parser: SqlParser | None = None):
-        super().__init__(src_dialect, tgt_dialect)
-        self.src_parser = src_parser or get_parser(src_dialect)
-        self.tgt_parser = tgt_parser or get_parser(tgt_dialect)
-        self.translation_rules = translation_rules
-        self.translation_runner = TranslationRunner(self.translation_rules, self)
-        if register:
-            register_translation(self)
+#
+# class Transformation(TranslationBase):
+#     def __init__(self, translation_rules: List[TranslationCommand],
+#                  src_parser: SqlParser | None = None, tgt_parser: SqlParser | None = None):
+#         super().__init__(src_dialect, tgt_dialect)
+#         self.src_parser = src_parser or get_parser(src_dialect)
+#         self.tgt_parser = tgt_parser or get_parser(tgt_dialect)
+#         self.translation_rules = translation_rules
+#         self.translation_runner = TranslationRunner(self.translation_rules, self)
+#         if register:
+#             register_translation(self)
 
 
 class Translation(TranslationBase):
@@ -95,7 +95,7 @@ class Translation(TranslationBase):
 
     def validate_rules(self):
         if any(not isinstance(i, TranslationCommand) for i in self.translation_rules):
-            raise ValueError(f'rule {i} is not type of {TranslationCommand}.')
+            raise ValueError(f'Invalid rule provided - not type of TranslationCommand.')
 
     def translate(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
         return self.translation_runner.run(stmt)

@@ -140,6 +140,7 @@ def search_parsed(parsed: TypeParsed | Iterable[s.Token],
     """
     bool_func = neg if exclude else identity
     if isinstance(parsed, collections_abc.Iterable) and levels > 0:
+        parsed = list(parsed)
         for i in parsed:
             if bool_func(match_parsed(parsed=i, sql_class=sql_class, ttype=ttype,
                                       pattern=pattern, case_sensitive=case_sensitive)):

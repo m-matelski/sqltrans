@@ -1,7 +1,8 @@
 from sqlparse import sql as s
 from sqlparse.sql import TypeParsed
 
-from sqltrans.helpers import get_function_name, build_tokens, replace_token, get_function_params
+from sqltrans.helpers import build_tokens, replace_token
+from sqltrans.queries import get_function_name, get_function_params
 from sqltrans.search import match_string, Search, SearchToken, CommonPatterns
 from sqltrans.translate import TranslationCommand, Translation
 from sqltrans.translations.generic_rules import remove_parenthesis_for_function

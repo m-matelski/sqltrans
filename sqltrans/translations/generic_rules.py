@@ -1,6 +1,7 @@
 import sqlparse.sql as s
 
-from sqltrans.helpers import get_function_name, get_function_params, build_tokens, replace_token
+from sqltrans.helpers import build_tokens, replace_token
+from sqltrans.queries import get_function_name, get_function_params
 from sqltrans.search import match_string
 from sqltrans.translate import Translation
 

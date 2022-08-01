@@ -3,7 +3,7 @@ from copy import deepcopy
 import sqlparse
 from sqlparse import sql as s
 
-from sqltrans.helpers import get_function_params
+from sqltrans.queries import get_function_params
 from sqltrans.search import Search
 from sqltrans.translate import find_route, translate
 from sqltrans.utils import read_file

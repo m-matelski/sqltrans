@@ -66,8 +66,8 @@ def test_it1():
 
 
 def test_complex_query():
-    src_sql_spark = read_file('spark_to_redshift/1/src.sql')
-    tgt_sql_redshift = read_file('spark_to_redshift/1/tgt.sql')
+    src_sql_spark = read_file('tests/spark_to_redshift/1/src.sql')
+    tgt_sql_redshift = read_file('tests/spark_to_redshift/1/tgt.sql')
     parsed_src = sqlparse.parse(src_sql_spark)[0]
     translated = translate(src_sql_spark, 'spark', 'redshift', as_parsed=True)
     x = 1

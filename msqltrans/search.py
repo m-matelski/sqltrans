@@ -11,7 +11,7 @@ import sqlparse.sql as s
 from sqlparse.tokens import TokenType
 from sqlparse.sql import TypeParsed
 
-from sqltrans.utils import listify
+from msqltrans.utils import listify
 
 # region Typing
 T = TypeVar('T')

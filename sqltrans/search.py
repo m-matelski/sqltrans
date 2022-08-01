@@ -389,4 +389,4 @@ class SearchToken:
 
 
 class CommonPatterns:
-    whitespaces = re.compile('\s')
+    whitespaces = re.compile(r'\s')

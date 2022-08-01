@@ -1,7 +1,8 @@
 import sqlparse
-from sqlparse.helpers import Search, CommonPatterns
 import sqlparse.sql as s
 import sqlparse.tokens as t
+
+from sqltrans.search import Search, CommonPatterns
 
 
 def test_search1():

@@ -1,12 +1,12 @@
 from sqlparse import sql as s
 from sqlparse.sql import TypeParsed
 
-from msqltrans.helpers import build_tokens, replace_token
-from msqltrans.queries import get_function_name, get_function_params
-from msqltrans.search import match_string, Search, SearchToken, CommonPatterns
-from msqltrans.translate import TranslationCommand, Translation
-from msqltrans.translations.generic_rules import remove_parenthesis_for_function
-from msqltrans.translations.utils import register_rule
+from sqltrans.helpers import build_tokens, replace_token
+from sqltrans.queries import get_function_name, get_function_params
+from sqltrans.search import match_string, Search, SearchToken, CommonPatterns
+from sqltrans.translate import TranslationCommand, Translation
+from sqltrans.translations.generic_rules import remove_parenthesis_for_function
+from sqltrans.translations.utils import register_rule
 
 rules: list[TranslationCommand] = []
 

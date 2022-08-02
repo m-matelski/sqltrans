@@ -24,7 +24,7 @@ import sqlparse
 import sqlparse.sql as s
 import sqlparse.tokens as t
 
-from msqltrans.search import Search
+from sqltrans.search import Search
 
 sql = "select cast(substring(tab.field, 1, 4) as int) from tab"
 parsed = sqlparse.parse(sql)[0]
@@ -34,10 +34,10 @@ print(cast_call)
 # >>> cast(substring(tab.field, 1, 4) as int)
 
 substring_params = Search(parsed)
-    .get(sql_class=s.Function, pattern='substring.*').first()
-    .get(sql_class=s.IdentifierList).first()
-    .exclude(ttype=(t.Punctuation, t.Whitespace), levels=1)
-    .result().as_list()
+.get(sql_class=s.Function, pattern='substring.*').first()
+.get(sql_class=s.IdentifierList).first()
+.exclude(ttype=(t.Punctuation, t.Whitespace), levels=1)
+.result().as_list()
 # >>> [<Identifier 'tab.fi...' at 0x22EBBD73610>, <Name 'tab' at 0x22EBBD9B280>, <Name 'field' at 0x22EBBD9B340>, <Integer '1' at 0x22EBBD9B460>, <Integer '4' at 0x22EBBD9B580>]
 ```
 
@@ -64,7 +64,7 @@ Predefined queries are helper functions which utilize Search objects.
 ```python
 # ... continuing previous example
 
-from msqltrans.queries import get_function_params, get_function_name
+from sqltrans.queries import get_function_params, get_function_name
 
 substring_func = Search(parsed).get(sql_class=s.Function, pattern='substring.*').result().one()
 substring_params = get_function_params(substring_func)

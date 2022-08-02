@@ -3,7 +3,7 @@ from sqlparse import tokens as t
 from sqlparse.lexer import Lexer
 from sqlparse.tokens import TokenType
 
-from msqltrans.search import Search, get_token_idx
+from sqltrans.search import Search, get_token_idx
 
 
 def build_tokens(tokens: list[s.TypeParsed | str], lexer: Lexer | None = None,

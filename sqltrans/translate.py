@@ -8,9 +8,9 @@ import sqlparse
 from sqlparse.parsers import get_parser, SqlParser
 from sqlparse.sql import TypeParsed
 
-from msqltrans.exceptions import TranslationNotFoundException
-from msqltrans.search import OneOrList
-from msqltrans.utils import chain_func, ChangingListIterator
+from sqltrans.exceptions import TranslationNotFoundException
+from sqltrans.search import OneOrList
+from sqltrans.utils import chain_func, ChangingListIterator
 
 
 # SQLs to consider

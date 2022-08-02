@@ -1,4 +1,4 @@
-from msqltrans.utils import ChangingListIterator
+from sqltrans.utils import ChangingListIterator
 
 
 class TestChangingListIterator:

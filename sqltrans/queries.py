@@ -1,7 +1,7 @@
 """
 This module consist of predefined parsed sql statement queries.
 """
-from msqltrans.search import Search
+from sqltrans.search import Search
 import sqlparse.sql as s
 import sqlparse.tokens as t
 

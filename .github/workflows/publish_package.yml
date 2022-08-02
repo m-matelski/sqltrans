@@ -3,6 +3,8 @@
 name: Build and Upload Python Package
 
 on:
+  workflow_dispatch:
+  
   release:
     types: [published]
 
@@ -26,5 +28,9 @@ jobs:
         pip install twine
     - name: Build package
       run: python setup.py sdist
+    - name: checks
+      run: |
+        ls -al
+        ls -al dist
     - name: Publish package
       run: twine upload dist/*

@@ -10,58 +10,15 @@ from sqlparse.sql import TypeParsed
 
 from sqltrans.exceptions import TranslationNotFoundException
 from sqltrans.search import OneOrList
+from sqltrans.transform import TransformationCommand, TransformationBase, RecursiveTransformationRunner, Transformation, \
+    CompositeTransformation, StatementTransformationRunner
 from sqltrans.utils import chain_func, ChangingListIterator
 
 
-# SQLs to consider
-# MySQL, Oracle, PostgreSQL, MicrosoftSQL, MongoDB
-# Redis, Elasticsearch, Teradata, SparkSQL, Redshift
-
-# In future adding dialect recognition??
-
-@runtime_checkable
-class TranslationCommand(Protocol):
-    """
-    Interface for translation command. Translation modifies statement in place.
-    """
-
-    def __call__(self, parsed: TypeParsed, translation: Translation) -> None:
-        ...
-
-
-class TranslationRunner:
-    """
-    Runs sequence of commands over input statement traversed recursively.
-    """
-
-    def __init__(self, translation_rules: List[TranslationCommand], translation: Translation):
-        self.translation_rules = translation_rules
-        self.translation = translation
-
-    def _recursive_run(self, parsed: TypeParsed):
-        for rule in self.translation_rules:
-            rule(parsed, self.translation)
-
-        if parsed.is_group:
-            for i in ChangingListIterator(parsed):  # TODO .tokens and typing for sequence?
-                self._recursive_run(i)
-
-    def run(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
-        """
-        Runs sequence of commands over input statement traversed recursively.
-        Returns translated statement.
-        """
-        stmt_copy = deepcopy(stmt)
-        self._recursive_run(stmt_copy)
-        return stmt_copy
-
-
 class TranslationBase(ABC):
-    """
-    Stores translation objects and translation
-    """
-
-    def __init__(self, src_dialect: str, tgt_dialect: str, ):
+    def __init__(self,
+                 src_dialect: str,
+                 tgt_dialect: str):
         self.src_dialect = src_dialect
         self.tgt_dialect = tgt_dialect
 
@@ -69,40 +26,32 @@ class TranslationBase(ABC):
     def translate(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
         pass
 
-#
-# class Transformation(TranslationBase):
-#     def __init__(self, translation_rules: List[TranslationCommand],
-#                  src_parser: SqlParser | None = None, tgt_parser: SqlParser | None = None):
-#         super().__init__(src_dialect, tgt_dialect)
-#         self.src_parser = src_parser or get_parser(src_dialect)
-#         self.tgt_parser = tgt_parser or get_parser(tgt_dialect)
-#         self.translation_rules = translation_rules
-#         self.translation_runner = TranslationRunner(self.translation_rules, self)
-#         if register:
-#             register_translation(self)
-
 
 class Translation(TranslationBase):
-    def __init__(self, src_dialect: str, tgt_dialect: str, translation_rules: List[TranslationCommand],
-                 src_parser: SqlParser | None = None, tgt_parser: SqlParser | None = None, register=True):
+
+    def __init__(self,
+                 src_dialect: str,
+                 tgt_dialect: str,
+                 transformation: TransformationBase,
+                 src_parser: SqlParser | None = None,
+                 tgt_parser: SqlParser | None = None,
+                 register=True):
         super().__init__(src_dialect, tgt_dialect)
+        self.transformation = transformation
         self.src_parser = src_parser or get_parser(src_dialect)
         self.tgt_parser = tgt_parser or get_parser(tgt_dialect)
-        self.translation_rules = translation_rules
-        self.translation_runner = TranslationRunner(self.translation_rules, self)
         if register:
             register_translation(self)
 
-    def validate_rules(self):
-        if any(not isinstance(i, TranslationCommand) for i in self.translation_rules):
-            raise ValueError(f'Invalid rule provided - not type of TranslationCommand.')
-
     def translate(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
-        return self.translation_runner.run(stmt)
+        return self.transformation.transform(stmt)
 
 
 class CompositeTranslation(TranslationBase):
-    def __init__(self, src_dialect: str, tgt_dialect: str, translations: List[Translation]):
+    def __init__(self,
+                 src_dialect: str,
+                 tgt_dialect: str,
+                 translations: List[TranslationBase]):
         super().__init__(src_dialect, tgt_dialect)
         self.translations = translations
 
@@ -111,7 +60,7 @@ class CompositeTranslation(TranslationBase):
 
 
 class TranslationMapping(UserDict):
-    def register_translation(self, src: str, tgt: str, translation: Translation, overwrite=False):
+    def register_translation(self, src: str, tgt: str, translation: TranslationBase, overwrite=False):
         trans = self.setdefault(src, {})
         if tgt in trans and overwrite:
             raise ValueError(f"Translation from {src} to {tgt} already exists. "
@@ -119,14 +68,14 @@ class TranslationMapping(UserDict):
         else:
             trans[tgt] = translation
 
-    def get_translation(self, src: str, tgt: str) -> Translation:
+    def get_translation(self, src: str, tgt: str) -> TranslationBase:
         return self[src][tgt]
 
 
 translations_meta = TranslationMapping()
 
 
-def register_translation(translation: Translation, overwrite=False, trans_meta=translations_meta):
+def register_translation(translation: TranslationBase, overwrite=False, trans_meta=translations_meta):
     trans_meta.register_translation(translation.src_dialect, translation.tgt_dialect, translation, overwrite)
 
 
@@ -149,7 +98,9 @@ def find_route(pairs: Mapping[Any, Collection[Any]], src, tgt) -> Optional[List[
     return result
 
 
-def find_translation(src_dialect: str, tgt_dialect: str, trans_meta: TranslationMapping) -> Optional[TranslationBase]:
+def find_translation(src_dialect: str,
+                     tgt_dialect: str,
+                     trans_meta: TranslationMapping) -> Optional[TranslationBase]:
     route = find_route(trans_meta, src_dialect, tgt_dialect)
     if not route:
         return None
@@ -163,9 +114,57 @@ def find_translation(src_dialect: str, tgt_dialect: str, trans_meta: Translation
         return translation
 
 
-def translate(sql: str, src_dialect: str, tgt_dialect: str, encoding=None,
-              src_parser: SqlParser | None = None, tgt_parser: SqlParser | None = None,
-              trans_meta: TranslationMapping = translations_meta, translation: TranslationBase | None = None,
+def build_translation(
+        src_dialect: str,
+        tgt_dialect: str,
+        src_parser: SqlParser | None = None,
+        tgt_parser: SqlParser | None = None,
+        register: bool = True,
+        global_rules: list[TransformationCommand] | None = None,
+        local_rules: list[TransformationCommand] | None = None) -> TranslationBase:
+
+    global_rules = [] if global_rules is None else global_rules
+    local_rules = [] if local_rules is None else local_rules
+
+    src_parser = src_parser or get_parser(src_dialect)
+    tgt_parser = tgt_parser or get_parser(tgt_dialect)
+
+    translation = Translation(
+        src_dialect=src_dialect,
+        tgt_dialect=tgt_dialect,
+        src_parser=src_parser,
+        tgt_parser=tgt_parser,
+        register=register,
+        transformation=CompositeTransformation(
+            transforms=[
+                Transformation(
+                    transformation_runner=StatementTransformationRunner(
+                        transformation_rules=global_rules
+                    ),
+                    src_parser=src_parser,
+                    tgt_parser=tgt_parser
+                ),
+                Transformation(
+                    transformation_runner=RecursiveTransformationRunner(
+                        transformation_rules=local_rules
+                    ),
+                    src_parser=src_parser,
+                    tgt_parser=tgt_parser
+                ),
+            ]
+        )
+    )
+    return translation
+
+
+def translate(sql: str,
+              src_dialect: str,
+              tgt_dialect: str,
+              encoding=None,
+              src_parser: SqlParser | None = None,
+              tgt_parser: SqlParser | None = None,
+              trans_meta: TranslationMapping = translations_meta,
+              translation: TranslationBase | None = None,
               as_parsed=False, ensure_list=False,
               ) -> OneOrList[TypeParsed | str]:
     src_parser = src_parser or get_parser(src_dialect)
@@ -184,5 +183,3 @@ def translate(sql: str, src_dialect: str, tgt_dialect: str, encoding=None,
     if not ensure_list and len(result) == 1:
         result = result[0]
     return result
-
-# TODO register translation decorator??, is there a need to create new class instead of parametrized instance?

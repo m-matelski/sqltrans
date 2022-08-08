@@ -1,17 +1,21 @@
+"""
+This module provides tools for analyzing and searching for structures in parsed sql statement token tree.
+"""
+
 from __future__ import annotations
 
 import re
 import sys
 import collections.abc as collections_abc
 from abc import ABC, abstractmethod
-from typing import Union, Type, Tuple, Generator, TypeVar, Optional, Collection, Iterable, List, overload, \
-    Sequence
+from functools import partial
+from typing import Union, Type, Tuple, Generator, TypeVar, Collection, Iterable, List, Sequence, Literal
 
 import sqlparse.sql as s
 from sqlparse.tokens import TokenType
 from sqlparse.sql import TypeParsed
 
-from sqltrans.utils import listify
+from sqltrans.utils import listify, kw_getattr
 
 # region Typing
 T = TypeVar('T')
@@ -148,6 +152,78 @@ def search_parsed(parsed: TypeParsed | Iterable[s.Token],
             yield from search_parsed(i, sql_class, ttype, pattern, case_sensitive, levels - 1, exclude)
 
 
+class ParsedSearcher(ABC):
+    """
+    Class wrapper for search parsed function.
+    Allows to store search criteria, perform lazy search, pass Searcher configuration as argument.
+    """
+
+    def __init__(self,
+                 sql_class: OneOrTuple[Type[s.Token]] | None = None,
+                 ttype: OneOrTuple[Type[TokenType]] | None = None,
+                 pattern: OneOrIterable[PatternType] | None = None,
+                 case_sensitive=False,
+                 levels=sys.maxsize):
+        self.sql_class = sql_class
+        self.ttype = ttype
+        self.pattern = pattern
+        self.case_sensitive = case_sensitive
+        self.levels = levels
+
+    def __call__(self, parsed: TypeParsed | Iterable[s.Token]) -> Generator[TypeParsed, None, None]:
+        return self.search(parsed)
+
+    @abstractmethod
+    def search(self, parsed: TypeParsed | Iterable[s.Token]) -> Generator[TypeParsed, None, None]:
+        """
+        Implement this method to define search criteria.
+
+        Args:
+            parsed: input parsed statement
+
+        Returns: Generator of Tokens - probably the result of search_parsed function.
+
+        """
+        pass
+
+
+class Match(ParsedSearcher):
+
+    def search(self, parsed: TypeParsed | Iterable[s.Token]) -> Generator[TypeParsed, None, None]:
+        """Returns tokens matching criteria."""
+        return search_parsed(
+            parsed=parsed,
+            sql_class=self.sql_class,
+            ttype=self.ttype,
+            pattern=self.pattern,
+            case_sensitive=self.case_sensitive,
+            levels=self.levels,
+            exclude=False
+        )
+
+
+class Exclude(ParsedSearcher):
+
+    def search(self, parsed: TypeParsed | Iterable[s.Token]) -> Generator[TypeParsed, None, None]:
+        """Returns all tokens except those matching any criteria."""
+        return search_parsed(
+            parsed=parsed,
+            sql_class=self.sql_class,
+            ttype=self.ttype,
+            pattern=self.pattern,
+            case_sensitive=self.case_sensitive,
+            levels=self.levels,
+            exclude=True
+        )
+
+
+class MatchAll(ParsedSearcher):
+    """Returns all tokens."""
+
+    def search(self, parsed: TypeParsed | Iterable[s.Token]) -> Generator[TypeParsed, None, None]:
+        return search_parsed(parsed=parsed, exclude=True)
+
+
 # endregion
 
 # single token tools
@@ -203,46 +279,66 @@ def get_succeeding_tokens(token: s.Token, how_many: int | None = None, include_s
 
 
 # Search fluent Interface
-class ParsedSearcher(ABC):
+class ParsedQueryable(ABC):
     @abstractmethod
     def get(self,
             sql_class: OneOrTuple[Type[s.Token]] | None = None,
             ttype: OneOrTuple[Type[TokenType]] | None = None,
             pattern: OneOrIterable[PatternType] | None = None,
-            case_sensitive: bool = False, levels: int = sys.maxsize) -> SearchStep:
+            case_sensitive: bool = False,
+            levels: int = sys.maxsize
+            ) -> SearchStep:
         """
-        Returns all Tokens matching condition.
+        Returns all Tokens matching condition from current query result.
         If sql_class and ttype are both provided, then check for either sql_class match or ttype match is done.
         If pattern is provided with sql_class and/or ttype then method checks for (sql_class or ttpye) and pattern.
-        :param sql_class: sql class or tuple of sql classes to check, if Tuple provided, check for any match.
-        :param ttype: token type or tuple of token types, if Tuple provided, check for any match.
-        :param pattern: pattern or tuple of patterns to test token value against, check for any match.
-        :param case_sensitive: Whether string pattern checks have to be case-sensitive.
-        :param levels: How deep recursive search should be performed.
-        :return:
+
+        Args:
+            sql_class: sql class or tuple of sql classes to check, if Tuple provided, check for any match.
+            ttype: token type or tuple of token types, if Tuple provided, check for any match.
+            pattern: pattern or tuple of patterns to test token value against, check for any match.
+            case_sensitive: Whether string pattern checks have to be case-sensitive.
+            levels: How deep recursive search should be performed.
+
+        Returns:
+            result step
         """
         pass
 
     @abstractmethod
     def get_all(self, levels: int = sys.maxsize) -> SearchStep:
         """
-        Scans recursively through all tokens, depends on maximum level
-        :param levels: How deep recursive search should be performed.
-        :return:
+        Scans recursively through all tokens, depends on maximum level.
+
+        Args:
+            levels: How deep recursive search should be performed.
+
+        Returns:
+            search step
         """
         pass
 
 
-class Search(ParsedSearcher):
+class Search(ParsedQueryable):
+    """
+    Search class is entry point for parsed search mechanism with fluent API.
+    It takes parsed sql statement, or Iterable of parsed statements, and allows to perform query on it.
+    """
+
     def __init__(self, parsed: OneOrIterable[TypeParsed]):
-        # Todo consider exclusion plain Token type from parsed argument, as search is done within a group
-        #   type(t) is s.Token
+        """
+        Args:
+            parsed: parsed statement, or iterable of parsed statements
+        """
         self.parsed = parsed
 
-    def get(self, sql_class: OneOrTuple[Type[s.Token]] | None = None,
+    def get(self,
+            sql_class: OneOrTuple[Type[s.Token]] | None = None,
             ttype: OneOrTuple[Type[TokenType]] | None = None,
             pattern: OneOrIterable[PatternType] | None = None,
-            case_sensitive=False, levels=sys.maxsize) -> SearchStep:
+            case_sensitive=False,
+            levels=sys.maxsize
+            ) -> SearchStep:
         result_set = search_parsed(parsed=self.parsed, sql_class=sql_class, ttype=ttype, pattern=pattern,
                                    case_sensitive=case_sensitive, levels=levels)
         return SearchStep(result_set)
@@ -252,17 +348,33 @@ class Search(ParsedSearcher):
         return SearchStep(result_set)
 
 
-class SearchStep(ParsedSearcher):
-    def __init__(self, parsed: Iterable[TypeParsed]):
+class SearchStep(ParsedQueryable):
+    """
+    SearchStep is initiated after first Search.get call. Every next query method call will return SearchStep instance.
+    It is entry point to get query result, or perform token-type search on current result set.
+    """
+
+    def __init__(self, parsed: OneOrIterable[TypeParsed]):
+        """
+        Args:
+            parsed: parsed statement, or iterable of Type Parsed (usually result of search, or SearchStep)
+        """
         self.parsed = parsed
 
     def result(self) -> SearchResult:
+        """
+        Returns:
+            Query result.
+        """
         return SearchResult(self.parsed)
 
-    def get(self, sql_class: OneOrTuple[Type[s.Token]] | None = None,
+    def get(self,
+            sql_class: OneOrTuple[Type[s.Token]] | None = None,
             ttype: OneOrTuple[Type[TokenType]] | None = None,
             pattern: OneOrIterable[PatternType] | None = None,
-            case_sensitive=False, levels=sys.maxsize) -> SearchStep:
+            case_sensitive=False,
+            levels=sys.maxsize
+            ) -> SearchStep:
         # Delegate to Search instance
         return Search(self.parsed).get(sql_class=sql_class, ttype=ttype, pattern=pattern,
                                        case_sensitive=case_sensitive, levels=levels)
@@ -271,10 +383,28 @@ class SearchStep(ParsedSearcher):
         # Delegate to Search instance
         return Search(self.parsed).get_all(levels=levels)
 
-    def exclude(self, sql_class: OneOrTuple[Type[s.Token]] | None = None,
+    def exclude(self,
+                sql_class: OneOrTuple[Type[s.Token]] | None = None,
                 ttype: OneOrTuple[Type[TokenType]] | None = None,
                 pattern: OneOrIterable[PatternType] | None = None,
-                case_sensitive=False, levels=sys.maxsize) -> SearchStep:
+                case_sensitive=False,
+                levels=sys.maxsize
+                ) -> SearchStep:
+        """
+        Excludes all Tokens matching criteria from current query result.
+        If sql_class and ttype are both provided, then check for either sql_class match or ttype match is done.
+        If pattern is provided with sql_class and/or ttype then method checks for (sql_class or ttpye) and pattern.
+
+        Args:
+            sql_class: sql class or tuple of sql classes to check, if Tuple provided, check for any match.
+            ttype: token type or tuple of token types, if Tuple provided, check for any match.
+            pattern: pattern or tuple of patterns to test token value against, check for any match.
+            case_sensitive: Whether string pattern checks have to be case-sensitive.
+            levels: How deep recursive search should be performed.
+
+        Returns:
+            result step
+        """
         result_set = search_parsed(parsed=self.parsed, sql_class=sql_class, ttype=ttype, pattern=pattern,
                                    case_sensitive=case_sensitive, levels=levels, exclude=True)
         return SearchStep(result_set)
@@ -289,27 +419,149 @@ class SearchStep(ParsedSearcher):
             raise ValueError('n must be > 0')
         return SearchStep(list(reversed(list(self.parsed)))[:n])
 
-    def first(self) -> SearchStep:
-        # TODO HANDLE ERRORS
+    def _get_one(self, idx: int) -> SearchStep:
+        """
+        Helper function for getting single element from current result.
+        Args:
+            idx: index of element to return
+
+        Returns:
+            search step
+        """
         parsed_list = list(self.parsed)
         if not parsed_list:
             parsed = []
         else:
-            parsed = parsed_list[0]
+            parsed = parsed_list[idx]
         return SearchStep(parsed)
 
+    def first(self) -> SearchStep:
+        """
+        Sets first token from current query resul (if any) as current query result.
+        Note: next search step iteration will be performed on token itself, so token will be omitted.
+        Returns:
+            search step
+        """
+        return self._get_one(0)
+
     def last(self) -> SearchStep:
-        parsed_list = list(self.parsed)
-        if not parsed_list:
-            parsed = []
-        else:
-            parsed = parsed_list[0]
-        return SearchStep(parsed)
+        """
+        Sets last token from current query resul (if any) as current query result.
+        Note: next search step iteration will be performed on token itself, so token will be omitted.
+        Returns:
+            search step
+        """
+        return self._get_one(-1)
+
+    def preceded_by(self, sql_class: OneOrTuple[Type[s.Token]] | None = None,
+                    ttype: OneOrTuple[Type[TokenType]] | None = None,
+                    pattern: OneOrIterable[PatternType] | None = None,
+                    case_sensitive=False, levels=sys.maxsize, search_in: ParsedSearcher | None = None) -> SearchStep:
+        """
+        Extracts tokens from current query result tokens that are preceded by token meeting criteria.
+        It takes first token meeting search_in criteria and test it against provided criteria.
+        If match not found, token is filtered out from final result.
+
+        Args:
+            sql_class: sql class match criteria for preceding token.
+            ttype: token type match criteria for preceding token.
+            pattern: token value pattern match criteria for preceding token.
+            case_sensitive: whether pattern match should be case-sensitive.
+            levels: How deep recursive search should be.
+            search_in: Allows to filter out preceding tokens. Might be used for example to exclude whitespaces tokens,
+                so the first non whitespace preceding tokens will be tested against criteria match.
+
+        Returns:
+            SearchStep filtered out with tokens meeting criteria.
+
+        """
+        return self._get_preceded_or_succeeded_by(
+            method_name='get_preceding',
+            sql_class=sql_class,
+            ttype=ttype,
+            pattern=pattern,
+            case_sensitive=case_sensitive,
+            levels=levels,
+            search_in=search_in
+        )
+
+    def succeeded_by(self, sql_class: OneOrTuple[Type[s.Token]] | None = None,
+                     ttype: OneOrTuple[Type[TokenType]] | None = None,
+                     pattern: OneOrIterable[PatternType] | None = None,
+                     case_sensitive=False, levels=sys.maxsize, search_in: ParsedSearcher | None = None) -> SearchStep:
+        """
+        Extracts tokens from current query result tokens that are succeeded by token meeting criteria.
+        It takes first token meeting search_in criteria and test it against provided criteria.
+        If match not found, token is filtered out from final result.
+
+        Args:
+            sql_class: sql class match criteria for preceding token.
+            ttype: token type match criteria for preceding token.
+            pattern: token value pattern match criteria for preceding token.
+            case_sensitive: whether pattern match should be case-sensitive.
+            levels: How deep recursive search should be.
+            search_in: Allows to filter out succeeding tokens. Might be used for example to exclude whitespaces tokens,
+                so the first non whitespace succeeding tokens will be tested against criteria match.
+
+        Returns:
+            SearchStep filtered out with tokens meeting criteria.
+
+        """
+        return self._get_preceded_or_succeeded_by(
+            method_name='get_succeeding',
+            sql_class=sql_class,
+            ttype=ttype,
+            pattern=pattern,
+            case_sensitive=case_sensitive,
+            levels=levels,
+            search_in=search_in
+        )
+
+    def _get_preceded_or_succeeded_by(
+            self,
+            method_name: Literal['get_preceding', 'get_succeeding'],
+            sql_class: OneOrTuple[Type[s.Token]] | None = None,
+            ttype: OneOrTuple[Type[TokenType]] | None = None,
+            pattern: OneOrIterable[PatternType] | None = None,
+            case_sensitive=False, levels=sys.maxsize, search_in: ParsedSearcher | None = None) -> SearchStep:
+        """
+        Parametrized method to extract tokens from current query result that are preceded pr succeded
+        by a token meeting criteria.
+        Args:
+            method_name:
+            sql_class:
+            ttype:
+            pattern:
+            case_sensitive:
+            levels:
+            search_in:
+
+        Returns:
+
+        """
+        search_in = search_in or MatchAll()
+        tokens = []
+
+        methods = {
+            'get_preceding': lambda x: x.get_preceding(nearest_first=True),
+            'get_succeeding': lambda x: x.get_succeeding()
+        }
+        method = methods[method_name]
+
+        for i in self.parsed:
+            # Search will perform recursive search and flatten the result
+            followed = Search(search_in(method(SearchToken(i)).result().as_list())) \
+                .get(sql_class=sql_class, ttype=ttype, pattern=pattern, case_sensitive=case_sensitive, levels=levels) \
+                .first().result().one_or_none()
+            if followed:
+                tokens.append(i)
+        return SearchStep(tokens)
 
     def search_token(self) -> SearchToken:
         """
-        if one value then go search in token, if many then excpetion
-        :return:
+        Perform token type search over a single token. If current result doesn't contain a single token
+        it will raise InvalidSearchable exception.
+        :return: SearchToken instance to query.
         """
         try:
             result = self.result().one()
@@ -331,6 +583,7 @@ class InvalidSearchable(Exception):
 
 
 class SearchResult(collections_abc.Sequence):
+    """Class for getting values from Search result."""
 
     def __init__(self, parsed: OneOrIterable[TypeParsed]):
         self.parsed = parsed
@@ -344,14 +597,42 @@ class SearchResult(collections_abc.Sequence):
                 yield i
 
     def as_list(self) -> List[TypeParsed]:
+        """
+        Return search result as list.
+        Returns:
+            list of tokens
+        """
         return self.values
 
     def one(self) -> TypeParsed:
+        """
+        Returns only one element,
+        raises SearchResultException if there is other number of tokens than 1 in search result.
+        Returns:
+            Result token
+        """
         if len(self.values) != 1:
             raise SearchResultException(f'Expected single value, got {len(self.values)}')
         return self.values[0]
 
+    def one_or_none(self) -> TypeParsed | None:
+        """
+        Returns only one element,
+        or None if there is other number of tokens than 1 in search result.
+        Returns:
+            Result token or None
+        """
+        try:
+            return self.one()
+        except SearchResultException:
+            return None
+
     def is_empty(self) -> bool:
+        """
+        Checks if search result is empty.
+        Returns:
+            True if search result is empty
+        """
         return bool(self.values)
 
     def __iter__(self) -> Iterable[TypeParsed]:
@@ -363,27 +644,73 @@ class SearchResult(collections_abc.Sequence):
     def __getitem__(self, n) -> Sequence[TypeParsed]:
         return self.values[n]
 
+    def __bool__(self):
+        return not (self.is_empty())
+
 
 class SearchToken:
+    """
+    Class for performing search on a group's token list level.
+    """
+
     def __init__(self, token: s.Token):
         if not isinstance(token, s.Token):
             raise InvalidSearchable('Searchable must be an instance of a Token.')
         self.token = token
 
-    def get_preceding(self, how_many: int | None = None, include_self=False) -> SearchStep:
+    def get_preceding(self, how_many: int | None = None, include_self=False, nearest_first=True) -> SearchStep:
+        """
+        Returns preceding tokens from token's level list.
+        Args:
+            how_many: How many preceding neighbour tokens to return (None to return all).
+            include_self: If return token from which search is started.
+            nearest_first: Whether start list from token nearest, or from left.
+
+        Returns:
+            search step
+        """
         tokens = get_preceding_tokens(self.token, how_many, include_self)
+        if nearest_first:
+            tokens = reversed(tokens)
         return SearchStep(tokens)
 
     def get_succeeding(self, how_many: int | None = None, include_self=False) -> SearchStep:
+        """
+        Returns succeeding tokens from token's level list.
+        Args:
+            how_many: How many succeeding neighbour tokens to return (None to return all).
+            include_self: If return token from which search is started.
+
+        Returns:
+            search step
+        """
         tokens = get_succeeding_tokens(token=self.token, how_many=how_many, include_self=include_self)
         return SearchStep(tokens)
 
     def get_neighbours(self, left: int | None = None, right: int | None = None,
                        include_self: bool = False) -> SearchStep:
+        """
+        Returns preceding and succeeding tokens from token's level list.
+        Args:
+            left: How many preceding neighbour tokens to return (None to return all).
+            right: How many succeeding neighbour tokens to return (None to return all).
+            include_self: If return token from which search is started.
+
+        Returns:
+            search step
+        """
         tokens = get_token_neighbours(token=self.token, left=left, right=right, include_self=include_self)
         return SearchStep(tokens)
 
     def get_all_neighbours(self, include_self=False) -> SearchStep:
+        """
+        Returns all tokens from token's level list.
+        Args:
+            include_self: If return token from which search is started.
+
+        Returns:
+            search step
+        """
         tokens = get_token_neighbours(token=self.token, left=None, right=None, include_self=include_self)
         return SearchStep(tokens)
 

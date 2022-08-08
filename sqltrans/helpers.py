@@ -8,6 +8,18 @@ from sqltrans.search import Search, get_token_idx
 
 def build_tokens(tokens: list[s.TypeParsed | str], lexer: Lexer | None = None,
                  encoding: str | None = None, translate_tokens=False) -> s.TokenList:
+    """
+    Builds TokenList instance from input sequence of strings and Tokens.
+    Args:
+        tokens: List of strings and Tokens.
+        lexer: Lexer used to parse input strings. Plain Token object without token type will be created when
+            no lexer provided.
+        encoding: lexer encoding.
+        translate_tokens: If translate input token to new tokens using lexer.
+
+    Returns:
+        TokenList
+    """
     new_tokens = []
     for token in tokens:
         if isinstance(token, str):
@@ -28,8 +40,13 @@ def build_tokens(tokens: list[s.TypeParsed | str], lexer: Lexer | None = None,
     return token_list
 
 
-# TODO consider removing/ slicing/ substituting
 def replace_token(old: s.Token, new: s.Token):
+    """
+    Replaces token in its group
+    Args:
+        old: token to replace
+        new: replacing token
+   """
     idx = get_token_idx(old)
     parent = old.parent
     parent.tokens[idx] = new

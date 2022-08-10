@@ -74,3 +74,9 @@ def test_searching_for_tables_without_schema():
         .result().as_list()
     result = [str(i) for i in result]
     assert result == ['tab1', 'tab3']
+
+
+# def test_searching_func_params():
+#     sql = "select max(to_date(rdt)) from tab1"
+#     parsed = sqlparse.parse(sql)[0]
+#     to_date_func =

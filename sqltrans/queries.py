@@ -30,7 +30,7 @@ def get_function_params(parsed: s.TypeParsed) -> list[s.TypeParsed]:
     """
     params = Search(parsed) \
         .get(sql_class=s.Parenthesis).first() \
-        .get(sql_class=s.IdentifierList).first() \
+        .get(sql_class=(s.IdentifierList, s.Identifier)).first() \
         .exclude(ttype=(t.Whitespace, t.Punctuation), levels=1) \
         .result().as_list()
     return params

@@ -29,25 +29,4 @@ def test_complex_query():
     src_sql_spark = read_file('tests/spark_to_redshift/1/src.sql')
     tgt_sql_redshift = read_file('tests/spark_to_redshift/1/tgt.sql')
     translated = translate(src_sql_spark, 'spark', 'redshift', as_parsed=False)
-    expected = ("WITH CTE_T1 as\n"
-                "(\n"
-                "    case when current_date <= fc.ad then dateadd(day, -1, dd.fpsd) else current_date end as tech_date\n"
-                "    from DD dd\n"
-                "),\n"
-                "CTE_T2 as\n"
-                "(\n"
-                "    select max(fc.f1) as d\n"
-                "    from FC fc\n"
-                "    where current_date > fc.ad\n"
-                "),\n"
-                "CTE_T3 as\n"
-                "(\n"
-                "    select max(to_date(rdt)) from tab1\n"
-                "),\n"
-                "select\n"
-                "current_timestamp as current_date_time,\n"
-                "t.f1\n"
-                "FROM MAIN_TABLE t1\n"
-                "WHERE t1.status = 'DONE'\n"
-                "and int(substring(t1.apy, 1, 4)) >= int(substring(t1.apx, 1, 4)) -1")
     assert translated == tgt_sql_redshift

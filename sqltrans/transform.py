@@ -148,9 +148,6 @@ class TransformationBase(ABC):
         pass
 
 
-
-
-
 class Transformation(TransformationBase):
     def __init__(self,
                  transformation_runner: TransformationRunnerBase,

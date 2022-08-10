@@ -25,8 +25,6 @@ def test_spark_to_redshift_cast():
     assert expected == translated
 
 
-
-
 def test_complex_query():
     src_sql_spark = read_file('tests/spark_to_redshift/1/src.sql')
     tgt_sql_redshift = read_file('tests/spark_to_redshift/1/tgt.sql')
@@ -52,4 +50,4 @@ def test_complex_query():
                 "FROM MAIN_TABLE t1\n"
                 "WHERE t1.status = 'DONE'\n"
                 "and int(substring(t1.apy, 1, 4)) >= int(substring(t1.apx, 1, 4)) -1")
-    assert translated == expected
+    assert translated == tgt_sql_redshift

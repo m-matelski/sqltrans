@@ -1,8 +1,9 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections import UserDict
-from copy import deepcopy
-from typing import List, Tuple, Any, Collection, Union, Optional, Mapping, Protocol, runtime_checkable
+from typing import List, Tuple, Any, Collection, Mapping, Optional
+
+Optional, Mapping
 
 import sqlparse
 from sqlparse.parsers import get_parser, SqlParser
@@ -12,10 +13,13 @@ from sqltrans.exceptions import TranslationNotFoundException
 from sqltrans.search import OneOrList
 from sqltrans.transform import TransformationCommand, TransformationBase, RecursiveTransformationRunner, Transformation, \
     CompositeTransformation, StatementTransformationRunner
-from sqltrans.utils import chain_func, ChangingListIterator
+from sqltrans.utils import chain_func
 
 
 class TranslationBase(ABC):
+    """
+    Base class for Translation.
+    """
     def __init__(self,
                  src_dialect: str,
                  tgt_dialect: str):
@@ -28,7 +32,9 @@ class TranslationBase(ABC):
 
 
 class Translation(TranslationBase):
-
+    """
+    Sql statement translation between source and target dialect.
+    """
     def __init__(self,
                  src_dialect: str,
                  tgt_dialect: str,
@@ -48,6 +54,10 @@ class Translation(TranslationBase):
 
 
 class CompositeTranslation(TranslationBase):
+    """
+    Composite translation allows to run multiple nested translation using the same interface.
+    It might be useful for translation using intermediate sql dialect.
+    """
     def __init__(self,
                  src_dialect: str,
                  tgt_dialect: str,
@@ -60,22 +70,49 @@ class CompositeTranslation(TranslationBase):
 
 
 class TranslationMapping(UserDict):
-    def register_translation(self, src: str, tgt: str, translation: TranslationBase, overwrite=False):
-        trans = self.setdefault(src, {})
-        if tgt in trans and overwrite:
-            raise ValueError(f"Translation from {src} to {tgt} already exists. "
+    """
+    Data structure for storing translation configuration for specific source and target sql dialects.
+    """
+    def register_translation(self, src_dialect: str, tgt_dialect: str, translation: TranslationBase, overwrite=False):
+        """
+        Register translation configuration.
+        Args:
+            src_dialect: source dialect
+            tgt_dialect: target dialect
+            translation: translation
+            overwrite: Whether to overwrite translation configuration if it already exists in structure.
+        """
+        trans = self.setdefault(src_dialect, {})
+        if tgt_dialect in trans and overwrite:
+            raise ValueError(f"Translation from {src_dialect} to {tgt_dialect} already exists. "
                              f"Use overwrite=True if You want to overwrite a translation")
         else:
-            trans[tgt] = translation
+            trans[tgt_dialect] = translation
 
-    def get_translation(self, src: str, tgt: str) -> TranslationBase:
-        return self[src][tgt]
+    def get_translation(self, src_dialect: str, tgt_dialect: str) -> TranslationBase:
+        """
+        Get translation for given source and target sql dialects.
+        Args:
+            src_dialect:
+            tgt_dialect:
+
+        Returns:
+
+        """
+        return self[src_dialect][tgt_dialect]
 
 
 translations_meta = TranslationMapping()
 
 
 def register_translation(translation: TranslationBase, overwrite=False, trans_meta=translations_meta):
+    """
+    Register translation configuration.
+    Args:
+        translation: translation object.
+        overwrite: Whether to overwrite translation configuration if it already exists in structure.
+        trans_meta: TranslationMapping reference to perform register operation on.
+    """
     trans_meta.register_translation(translation.src_dialect, translation.tgt_dialect, translation, overwrite)
 
 

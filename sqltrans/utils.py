@@ -65,7 +65,3 @@ def read_file(p: Path | str) -> str:
     with open(p) as file:
         content = file.read()
     return content
-
-
-def kw_getattr(o, name: str):
-    return getattr(o, name)

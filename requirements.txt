@@ -1,1 +1,1 @@
-msqlparse==0.4.3
+msqlparse==0.4.4

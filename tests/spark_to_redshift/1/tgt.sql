@@ -18,4 +18,4 @@ current_timestamp as current_date_time,
 t.f1
 FROM MAIN_TABLE t1
 WHERE t1.status = 'DONE'
-and int(substr(t1.apy, 1, 4)) >= int(substr(t1.apx, 1, 4)) -1
+and int(substring(t1.apy, 1, 4)) >= int(substring(t1.apx, 1, 4)) -1

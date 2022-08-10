@@ -6,7 +6,7 @@ def readme():
         return f.read()
 
 
-VERSION = '0.0.1'
+VERSION = '0.0.2'
 
 setuptools.setup(
     name='sqltrans',
@@ -20,7 +20,7 @@ setuptools.setup(
     author_email='m.z.matelski@gmail.com',
     url='https://github.com/m-matelski/sqltrans',
     keywords=['sql', 'transform', 'translate'],
-    install_requires=['msqlparse==0.4.3'],
+    install_requires=['msqlparse==0.4.4'],
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Intended Audience :: Developers',

@@ -20,6 +20,3 @@ def remove_parenthesis_for_function(func_names: list[str]):
             replace_token(parsed, new_token)
 
     return remove_parenthesis
-
-
-# def replace_function_name substring to substr

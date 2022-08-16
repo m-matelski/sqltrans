@@ -23,13 +23,13 @@ class TransformationCommand(Protocol):
     Transformation modifies statement in place, or pass modification task to TransformationRunner instance.
     """
 
-    def __call__(self, parsed: TypeParsed, transform: TransformationBase) -> TypeParsed | None:
+    def __call__(self, parsed: TypeParsed, tgt_parser: SqlParser) -> TypeParsed | None:
         """
         This method will be called for every element in parsed sql statement.
 
         Args:
             parsed: parsed sql statement to transform.
-            transform: transform instance reference.
+            tgt_parser: transform instance reference.
 
         Returns:
             new parsed object to be used to replace input parsed in parsed tree by TransformationRunner instance,
@@ -39,16 +39,6 @@ class TransformationCommand(Protocol):
 
 
 class TransformationRunnerBase(ABC):
-    def __init__(self,
-                 transformation_rules: list[TransformationCommand],
-                 transformation: TransformationBase | None = None):
-        self.transformation_rules = transformation_rules
-        self.transformation: TransformationBase | None = transformation
-        self.validate_rules()
-
-    def validate_rules(self):
-        if any(not isinstance(i, TransformationCommand) for i in self.transformation_rules):
-            raise ValueError(f'Invalid rule provided - not type of TranslationCommand.')
 
     @abstractmethod
     def run(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
@@ -64,11 +54,22 @@ class TransformationRunnerBase(ABC):
         """
         pass
 
-    def set_transformation(self, transformation: TransformationBase):
-        self.transformation = transformation
+
+class ConcreteTransformationRunnerBase(TransformationRunnerBase, ABC):
+    def __init__(self,
+                 transformation_rules: list[TransformationCommand],
+                 tgt_parser: SqlParser):
+        self.transformation_rules = transformation_rules
+        self.tgt_parser = tgt_parser
+        self.validate_rules()
+
+    def validate_rules(self):
+        # TODO: this sucks because it doesn't check for protocol method signature
+        if any(not isinstance(i, TransformationCommand) for i in self.transformation_rules):
+            raise ValueError(f'Invalid rule provided - not type of TranslationCommand.')
 
 
-class RecursiveTransformationRunner(TransformationRunnerBase):
+class RecursiveTransformationRunner(ConcreteTransformationRunnerBase):
     """
     Runs sequence of commands over input parsed sql statement traversed recursively.
     """
@@ -81,7 +82,7 @@ class RecursiveTransformationRunner(TransformationRunnerBase):
             parsed: parsed sql statement, or it's nested part.
         """
         for rule in self.transformation_rules:
-            result_parsed = rule(parsed, self.transformation)
+            result_parsed = rule(parsed, self.tgt_parser)
 
             if isinstance(result_parsed, sqlparse.sql.Token):
                 replace_token(parsed, result_parsed)
@@ -110,7 +111,7 @@ class RecursiveTransformationRunner(TransformationRunnerBase):
         return stmt_copy
 
 
-class StatementTransformationRunner(TransformationRunnerBase):
+class StatementTransformationRunner(ConcreteTransformationRunnerBase):
 
     def run(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
         """
@@ -123,52 +124,13 @@ class StatementTransformationRunner(TransformationRunnerBase):
         """
         stmt_copy = deepcopy(stmt)
         for rule in self.transformation_rules:
-            result_parsed = rule(stmt_copy, self.transformation)
+            result_parsed = rule(stmt_copy, self.tgt_parser)
         return stmt_copy
 
 
-class TransformationBase(ABC):
-    """
-    Entry interface for performing transformation.
-    Subclasses are responsible for creating/injecting TransformationRunner and trigger it on transform call.
-    TransformationBase instance will be passed to every transformation rule triggered by Runner,
-    it may consist additional data necessary to perform transformation.
-    """
+class CompositeTransformationRunner(TransformationRunnerBase):
+    def __init__(self, transformations: list[TransformationRunnerBase]):
+        self.transformations = transformations
 
-    @abstractmethod
-    def transform(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
-        """
-        Transform parsed sql statement.
-        Args:
-            stmt: input statement
-
-        Returns:
-            Transformed statement.
-        """
-        pass
-
-
-class Transformation(TransformationBase):
-    def __init__(self,
-                 transformation_runner: TransformationRunnerBase,
-                 src_parser: SqlParser | None = None,
-                 tgt_parser: SqlParser | None = None):
-        self.src_parser = src_parser or GenericSqlParser()
-        self.tgt_parser = tgt_parser or GenericSqlParser()
-        self.transformation_runner = transformation_runner
-        self.transformation_runner.transformation = self
-
-    def transform(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
-        return self.transformation_runner.run(stmt)
-
-
-class CompositeTransformation(TransformationBase):
-    """
-    Runs multiple Transformation one after the other.
-    """
-
-    def __init__(self, transforms: list[TransformationBase]):
-        self.transforms = transforms
-
-    def transform(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
-        return chain_func(stmt, (trans.transform for trans in self.transforms))
+    def run(self, stmt: sqlparse.sql.Statement) -> sqlparse.sql.Statement:
+        return chain_func(stmt, (trans.run for trans in self.transformations))

@@ -1,4 +1,5 @@
 import sqlparse.sql as s
+from sqlparse.parsers import SqlParser
 
 from sqltrans.helpers import build_tokens, replace_token
 from sqltrans.queries import get_function_name, get_function_params
@@ -11,12 +12,12 @@ def debug_rule(parsed: s.TypeParsed) -> None:
 
 
 def remove_parenthesis_for_function(func_names: list[str]):
-    def remove_parenthesis(parsed: s.TypeParsed, translation: Translation) -> None:
+    def remove_parenthesis(parsed: s.TypeParsed, tgt_parser: SqlParser) -> None:
         if isinstance(parsed, s.Function) \
                 and match_string(get_function_name(parsed), func_names) \
                 and not get_function_params(parsed):
             func_name = get_function_name(parsed)
-            new_token = build_tokens(tokens=[func_name], lexer=translation.tgt_parser.get_lexer())
+            new_token = build_tokens(tokens=[func_name], lexer=tgt_parser.get_lexer())
             replace_token(parsed, new_token)
 
     return remove_parenthesis

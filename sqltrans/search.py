@@ -279,6 +279,8 @@ def get_succeeding_tokens(token: s.Token, how_many: int | None = None, include_s
 
 
 # Search fluent Interface
+# TODO: consider separating storing query steps, from query running,
+#  ability to run query, or inspect query, reuse query etc.
 class ParsedQueryable(ABC):
     @abstractmethod
     def get(self,
@@ -633,7 +635,7 @@ class SearchResult(collections_abc.Sequence):
         Returns:
             True if search result is empty
         """
-        return bool(self.values)
+        return not bool(self.values)
 
     def __iter__(self) -> Iterable[TypeParsed]:
         return iter(self.values)

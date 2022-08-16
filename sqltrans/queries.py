@@ -28,9 +28,5 @@ def get_function_params(parsed: s.TypeParsed) -> list[s.TypeParsed]:
     Returns:
         List of Tokens, which are parameter for function provided in parsed.
     """
-    params = Search(parsed) \
-        .get(sql_class=s.Parenthesis).first() \
-        .get(sql_class=(s.IdentifierList, s.Identifier)).first() \
-        .exclude(ttype=(t.Whitespace, t.Punctuation), levels=1) \
-        .result().as_list()
-    return params
+    if isinstance(parsed, s.Function):
+        return list(parsed.get_parameters())
